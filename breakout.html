@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ブロック崩し</title>
+  <style>
+    body {
+      margin: 0;
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: Arial, sans-serif;
+      color: white;
+    }
+    canvas {
+      border: 2px solid #e94560;
+      border-radius: 4px;
+    }
+    #info {
+      margin-bottom: 10px;
+      font-size: 18px;
+      display: flex;
+      gap: 40px;
+    }
+    #message {
+      margin-top: 10px;
+      font-size: 20px;
+      color: #e94560;
+      height: 28px;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">
+    <span>スコア: <span id="score">0</span></span>
+    <span>残機: <span id="lives">3</span></span>
+  </div>
+  <canvas id="canvas" width="480" height="520"></canvas>
+  <div id="message">← → キーまたはマウスでバーを動かす　スペースキーでスタート</div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const COLS = 8;
+    const ROWS = 5;
+    const BLOCK_W = 52;
+    const BLOCK_H = 20;
+    const BLOCK_GAP = 4;
+    const BLOCK_OFFSET_X = 16;
+    const BLOCK_OFFSET_Y = 40;
+
+    const COLORS = ['#e94560', '#f5a623', '#f8e71c', '#7ed321', '#4a90e2', '#9b59b6'];
+
+    let score = 0;
+    let lives = 3;
+    let gameState = 'waiting'; // waiting, playing, gameover, clear
+
+    const paddle = { x: 190, y: 490, w: 100, h: 12, speed: 7 };
+    const ball = { x: 240, y: 470, r: 8, dx: 3.5, dy: -3.5 };
+
+    let blocks = [];
+    let keys = {};
+
+    function initBlocks() {
+      blocks = [];
+      for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+          blocks.push({
+            x: BLOCK_OFFSET_X + c * (BLOCK_W + BLOCK_GAP),
+            y: BLOCK_OFFSET_Y + r * (BLOCK_H + BLOCK_GAP),
+            w: BLOCK_W,
+            h: BLOCK_H,
+            color: COLORS[r % COLORS.length],
+            alive: true
+          });
+        }
+      }
+    }
+
+    function resetBall() {
+      ball.x = paddle.x + paddle.w / 2;
+      ball.y = paddle.y - ball.r - 2;
+      ball.dx = 3.5 * (Math.random() > 0.5 ? 1 : -1);
+      ball.dy = -3.5;
+    }
+
+    function drawBlock(b) {
+      ctx.fillStyle = b.color;
+      ctx.beginPath();
+      ctx.roundRect(b.x, b.y, b.w, b.h, 4);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    function drawPaddle() {
+      const grad = ctx.createLinearGradient(paddle.x, paddle.y, paddle.x, paddle.y + paddle.h);
+      grad.addColorStop(0, '#e94560');
+      grad.addColorStop(1, '#c0392b');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.roundRect(paddle.x, paddle.y, paddle.w, paddle.h, 6);
+      ctx.fill();
+    }
+
+    function drawBall() {
+      const grad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, ball.r);
+      grad.addColorStop(0, '#ffffff');
+      grad.addColorStop(1, '#4a90e2');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function update() {
+      if (gameState !== 'playing') return;
+
+      // パドル移動
+      if (keys['ArrowLeft'] && paddle.x > 0) paddle.x -= paddle.speed;
+      if (keys['ArrowRight'] && paddle.x + paddle.w < canvas.width) paddle.x += paddle.speed;
+
+      // ボール移動
+      ball.x += ball.dx;
+      ball.y += ball.dy;
+
+      // 壁反射
+      if (ball.x - ball.r < 0) { ball.x = ball.r; ball.dx = Math.abs(ball.dx); }
+      if (ball.x + ball.r > canvas.width) { ball.x = canvas.width - ball.r; ball.dx = -Math.abs(ball.dx); }
+      if (ball.y - ball.r < 0) { ball.y = ball.r; ball.dy = Math.abs(ball.dy); }
+
+      // ボール落下
+      if (ball.y + ball.r > canvas.height) {
+        lives--;
+        document.getElementById('lives').textContent = lives;
+        if (lives <= 0) {
+          gameState = 'gameover';
+          document.getElementById('message').textContent = 'ゲームオーバー　スペースキーでリスタート';
+        } else {
+          gameState = 'waiting';
+          resetBall();
+          document.getElementById('message').textContent = 'スペースキーで再開';
+        }
+        return;
+      }
+
+      // パドルとの衝突
+      if (
+        ball.y + ball.r >= paddle.y &&
+        ball.y + ball.r <= paddle.y + paddle.h &&
+        ball.x >= paddle.x &&
+        ball.x <= paddle.x + paddle.w &&
+        ball.dy > 0
+      ) {
+        const hit = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
+        ball.dx = hit * 5;
+        ball.dy = -Math.abs(ball.dy);
+      }
+
+      // ブロックとの衝突
+      for (const b of blocks) {
+        if (!b.alive) continue;
+        if (
+          ball.x + ball.r > b.x &&
+          ball.x - ball.r < b.x + b.w &&
+          ball.y + ball.r > b.y &&
+          ball.y - ball.r < b.y + b.h
+        ) {
+          b.alive = false;
+          score += 10;
+          document.getElementById('score').textContent = score;
+
+          const overlapLeft = ball.x + ball.r - b.x;
+          const overlapRight = b.x + b.w - (ball.x - ball.r);
+          const overlapTop = ball.y + ball.r - b.y;
+          const overlapBottom = b.y + b.h - (ball.y - ball.r);
+          const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+
+          if (minOverlap === overlapTop || minOverlap === overlapBottom) {
+            ball.dy *= -1;
+          } else {
+            ball.dx *= -1;
+          }
+          break;
+        }
+      }
+
+      // クリア判定
+      if (blocks.every(b => !b.alive)) {
+        gameState = 'clear';
+        document.getElementById('message').textContent = 'クリア！ スペースキーでもう一度';
+      }
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // 背景
+      ctx.fillStyle = '#16213e';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // ブロック
+      for (const b of blocks) {
+        if (b.alive) drawBlock(b);
+      }
+
+      drawPaddle();
+      drawBall();
+
+      // オーバーレイ
+      if (gameState === 'gameover') {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#e94560';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2);
+        ctx.textAlign = 'left';
+      } else if (gameState === 'clear') {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#f8e71c';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('CLEAR!', canvas.width / 2, canvas.height / 2);
+        ctx.textAlign = 'left';
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // キー入力
+    document.addEventListener('keydown', e => {
+      keys[e.code] = true;
+      if (e.code === 'Space') {
+        if (gameState === 'waiting') {
+          gameState = 'playing';
+          document.getElementById('message').textContent = '';
+        } else if (gameState === 'gameover' || gameState === 'clear') {
+          score = 0;
+          lives = 3;
+          document.getElementById('score').textContent = 0;
+          document.getElementById('lives').textContent = 3;
+          initBlocks();
+          resetBall();
+          gameState = 'waiting';
+          document.getElementById('message').textContent = 'スペースキーでスタート';
+        }
+      }
+    });
+    document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // マウス操作
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      paddle.x = mx - paddle.w / 2;
+      paddle.x = Math.max(0, Math.min(canvas.width - paddle.w, paddle.x));
+      if (gameState === 'waiting') {
+        ball.x = paddle.x + paddle.w / 2;
+      }
+    });
+
+    canvas.addEventListener('click', () => {
+      if (gameState === 'waiting') {
+        gameState = 'playing';
+        document.getElementById('message').textContent = '';
+      }
+    });
+
+    initBlocks();
+    resetBall();
+    loop();
+  </script>
+</body>
+</html>
