@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>天気予報まとめ</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: linear-gradient(135deg, #1a6fa8 0%, #2b9bde 50%, #87ceeb 100%);
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #fff;
+      font-size: 1.8rem;
+      margin-bottom: 8px;
+      text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+    }
+
+    #subtitle {
+      text-align: center;
+      color: rgba(255,255,255,0.85);
+      font-size: 0.9rem;
+      margin-bottom: 20px;
+    }
+
+    /* Search */
+    #search-box {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    #city-input {
+      padding: 10px 16px;
+      border-radius: 24px;
+      border: none;
+      font-size: 1rem;
+      width: 240px;
+      outline: none;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    #search-btn {
+      padding: 10px 22px;
+      border-radius: 24px;
+      border: none;
+      background: #fff;
+      color: #1a6fa8;
+      font-size: 1rem;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      transition: background 0.2s;
+    }
+
+    #search-btn:hover { background: #e8f4ff; }
+
+    /* Cards container */
+    #container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Today card */
+    #today-card {
+      background: rgba(255,255,255,0.22);
+      backdrop-filter: blur(8px);
+      border-radius: 20px;
+      padding: 28px 32px;
+      color: #fff;
+      margin-bottom: 20px;
+      display: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+
+    #today-card .location {
+      font-size: 1.4rem;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    #today-card .date-str {
+      font-size: 0.85rem;
+      opacity: 0.8;
+      margin-bottom: 16px;
+    }
+
+    #today-card .main-row {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    #today-card .weather-icon { font-size: 5rem; line-height: 1; }
+
+    #today-card .temp-block .current-temp {
+      font-size: 3.5rem;
+      font-weight: 300;
+      line-height: 1;
+    }
+
+    #today-card .temp-block .temp-range {
+      font-size: 1rem;
+      opacity: 0.85;
+    }
+
+    #today-card .desc {
+      font-size: 1.3rem;
+      font-weight: 500;
+    }
+
+    #today-card .details {
+      display: flex;
+      gap: 24px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    #today-card .detail-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-size: 0.85rem;
+      opacity: 0.9;
+    }
+
+    #today-card .detail-item span:first-child {
+      font-size: 1.4rem;
+      margin-bottom: 2px;
+    }
+
+    /* Summary alert */
+    #summary-alert {
+      background: rgba(255,255,255,0.95);
+      border-radius: 14px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: none;
+      color: #333;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+
+    #summary-alert h3 {
+      color: #1a6fa8;
+      margin-bottom: 8px;
+      font-size: 1rem;
+    }
+
+    #summary-text {
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    /* Weekly forecast */
+    #weekly {
+      display: none;
+    }
+
+    #weekly h2 {
+      color: #fff;
+      font-size: 1rem;
+      margin-bottom: 10px;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    #weekly-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 10px;
+    }
+
+    .day-card {
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(6px);
+      border-radius: 14px;
+      padding: 14px 10px;
+      text-align: center;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      transition: transform 0.15s;
+    }
+
+    .day-card:hover { transform: translateY(-3px); }
+
+    .day-card .day-name { font-weight: bold; font-size: 0.9rem; margin-bottom: 6px; }
+    .day-card .day-icon { font-size: 2rem; margin-bottom: 6px; }
+    .day-card .day-max { font-size: 1.1rem; font-weight: bold; }
+    .day-card .day-min { font-size: 0.85rem; opacity: 0.8; }
+    .day-card .day-rain { font-size: 0.78rem; margin-top: 4px; opacity: 0.85; }
+
+    /* Loading / Error */
+    #status {
+      text-align: center;
+      color: rgba(255,255,255,0.9);
+      font-size: 1rem;
+      padding: 20px;
+      display: none;
+    }
+
+    #error-msg {
+      text-align: center;
+      background: rgba(255,80,80,0.85);
+      color: #fff;
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-bottom: 16px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h1>&#127775; 天気予報まとめ</h1>
+  <p id="subtitle">都市名を入力して天気をチェック</p>
+
+  <div id="search-box">
+    <input id="city-input" type="text" placeholder="例: Tokyo, Osaka, Sapporo" />
+    <button id="search-btn" onclick="searchCity()">検索</button>
+  </div>
+
+  <div id="container">
+    <div id="status">読み込み中...</div>
+    <div id="error-msg"></div>
+
+    <div id="today-card">
+      <div class="location" id="loc-name"></div>
+      <div class="date-str" id="today-date"></div>
+      <div class="main-row">
+        <div class="weather-icon" id="today-icon"></div>
+        <div class="temp-block">
+          <div class="current-temp" id="today-temp"></div>
+          <div class="temp-range" id="today-range"></div>
+        </div>
+        <div class="desc" id="today-desc"></div>
+      </div>
+      <div class="details">
+        <div class="detail-item"><span>&#128167;</span><span id="today-rain"></span></div>
+        <div class="detail-item"><span>&#129511;</span><span id="today-humidity"></span></div>
+        <div class="detail-item"><span>&#127788;</span><span id="today-wind"></span></div>
+        <div class="detail-item"><span>&#127765;</span><span id="today-sunrise"></span></div>
+        <div class="detail-item"><span>&#127762;</span><span id="today-sunset"></span></div>
+      </div>
+    </div>
+
+    <div id="summary-alert">
+      <h3>&#128196; AI風まとめ</h3>
+      <div id="summary-text"></div>
+    </div>
+
+    <div id="weekly">
+      <h2>7日間の予報</h2>
+      <div id="weekly-cards"></div>
+    </div>
+  </div>
+
+  <script>
+    // Geocoding: city name -> lat/lon using Open-Meteo geocoding API
+    async function geocode(city) {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1&language=ja&format=json`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (!data.results || data.results.length === 0) throw new Error(`「${city}」が見つかりません`);
+      return data.results[0];
+    }
+
+    // Fetch weather from Open-Meteo
+    async function fetchWeather(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+        `&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m` +
+        `&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,sunrise,sunset` +
+        `&timezone=auto&forecast_days=7`;
+      const res = await fetch(url);
+      return await res.json();
+    }
+
+    // WMO weather code -> icon + description
+    function weatherInfo(code) {
+      const map = [
+        [0,  '&#9728;&#65039;', '快晴'],
+        [1,  '&#127780;&#65039;', 'ほぼ晴れ'],
+        [2,  '&#9925;', '一部曇り'],
+        [3,  '&#9729;', '曇り'],
+        [45, '&#127787;&#65039;', '霧'],
+        [48, '&#127787;&#65039;', '霧氷'],
+        [51, '&#127746;', '霧雨（弱）'],
+        [53, '&#127746;', '霧雨'],
+        [55, '&#127746;', '霧雨（強）'],
+        [61, '&#127783;&#65039;', '小雨'],
+        [63, '&#127783;&#65039;', '雨'],
+        [65, '&#127783;&#65039;', '大雨'],
+        [71, '&#10052;&#65039;', '小雪'],
+        [73, '&#10052;&#65039;', '雪'],
+        [75, '&#10052;&#65039;', '大雪'],
+        [77, '&#127784;&#65039;', 'あられ'],
+        [80, '&#127783;&#65039;', 'にわか雨（弱）'],
+        [81, '&#127783;&#65039;', 'にわか雨'],
+        [82, '&#127783;&#65039;', 'にわか雨（強）'],
+        [85, '&#127784;&#65039;', 'にわか雪'],
+        [86, '&#127784;&#65039;', 'にわか雪（強）'],
+        [95, '&#9928;&#65039;', '雷雨'],
+        [96, '&#9928;&#65039;', '雷雨＋ひょう'],
+        [99, '&#9928;&#65039;', '激しい雷雨'],
+      ];
+      for (let i = map.length - 1; i >= 0; i--) {
+        if (code >= map[i][0]) return { icon: map[i][1], desc: map[i][2] };
+      }
+      return { icon: '&#127745;', desc: '不明' };
+    }
+
+    function formatTime(isoStr) {
+      return isoStr ? isoStr.slice(11, 16) : '--:--';
+    }
+
+    function dayLabel(dateStr, i) {
+      const days = ['日','月','火','水','木','金','土'];
+      const d = new Date(dateStr);
+      if (i === 0) return '今日';
+      if (i === 1) return '明日';
+      return `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
+    }
+
+    function buildSummary(locName, daily) {
+      const info0 = weatherInfo(daily.weather_code[0]);
+      const maxT = daily.temperature_2m_max[0];
+      const minT = daily.temperature_2m_min[0];
+      const rain = daily.precipitation_probability_max[0];
+
+      // Find rain days in next 7 days
+      const rainDays = [];
+      const dayLabels = ['日','月','火','水','木','金','土'];
+      for (let i = 1; i < 7; i++) {
+        if (daily.precipitation_probability_max[i] >= 40) {
+          const d = new Date(daily.time[i]);
+          rainDays.push(`${d.getMonth()+1}/${d.getDate()}(${dayLabels[d.getDay()]})`);
+        }
+      }
+
+      let text = `${locName}の今日の天気は<strong>${info0.desc}</strong>です。`;
+      text += `最高気温 <strong>${maxT}°C</strong>、最低気温 <strong>${minT}°C</strong>。`;
+
+      if (rain >= 60) text += `降水確率が<strong>${rain}%</strong>と高いため、傘を持参しましょう。`;
+      else if (rain >= 30) text += `降水確率は${rain}%なので、折り畳み傘があると安心です。`;
+      else text += `雨の心配はほとんどありません。`;
+
+      const tempDiff = maxT - minT;
+      if (tempDiff >= 12) text += ` 気温差が大きい（${tempDiff}°C）ので、重ね着がおすすめです。`;
+      if (maxT >= 35) text += ` 猛暑日が予想されます。熱中症に十分注意してください。`;
+      else if (maxT >= 30) text += ` 真夏日の予報です。こまめな水分補給を心がけましょう。`;
+      else if (maxT <= 5) text += ` 非常に寒い一日です。防寒対策をしっかりと。`;
+
+      if (rainDays.length > 0) {
+        text += `<br>今後7日間では <strong>${rainDays.join('・')}</strong> に雨が降る見込みです。`;
+      } else {
+        text += `<br>今後7日間は比較的お天気が良さそうです。`;
+      }
+
+      return text;
+    }
+
+    function show(id) { document.getElementById(id).style.display = ''; }
+    function hide(id) { document.getElementById(id).style.display = 'none'; }
+    function block(id) { document.getElementById(id).style.display = 'block'; }
+
+    async function searchCity() {
+      const city = document.getElementById('city-input').value.trim();
+      if (!city) return;
+
+      hide('today-card');
+      hide('summary-alert');
+      hide('weekly');
+      hide('error-msg');
+      block('status');
+      document.getElementById('status').textContent = '読み込み中...';
+
+      try {
+        const loc = await geocode(city);
+        const weather = await fetchWeather(loc.latitude, loc.longitude);
+        renderWeather(loc, weather);
+      } catch (e) {
+        hide('status');
+        document.getElementById('error-msg').textContent = e.message;
+        block('error-msg');
+      }
+    }
+
+    function renderWeather(loc, w) {
+      hide('status');
+      const c = w.current;
+      const d = w.daily;
+      const info = weatherInfo(d.weather_code[0]);
+
+      // Location name
+      const locName = loc.name + (loc.admin1 ? ` (${loc.admin1})` : '');
+      document.getElementById('loc-name').textContent = `📍 ${locName}`;
+
+      // Date
+      const now = new Date();
+      const dateOptions = { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' };
+      document.getElementById('today-date').textContent = now.toLocaleDateString('ja-JP', dateOptions);
+
+      // Main
+      document.getElementById('today-icon').innerHTML = info.icon;
+      document.getElementById('today-temp').textContent = `${Math.round(c.temperature_2m)}°C`;
+      document.getElementById('today-range').textContent =
+        `最高 ${d.temperature_2m_max[0]}° / 最低 ${d.temperature_2m_min[0]}°`;
+      document.getElementById('today-desc').textContent = info.desc;
+
+      // Details
+      document.getElementById('today-rain').textContent =
+        `降水 ${d.precipitation_probability_max[0]}%`;
+      document.getElementById('today-humidity').textContent =
+        `湿度 ${c.relative_humidity_2m}%`;
+      document.getElementById('today-wind').textContent =
+        `風速 ${c.wind_speed_10m} km/h`;
+      document.getElementById('today-sunrise').textContent =
+        `日の出 ${formatTime(d.sunrise[0])}`;
+      document.getElementById('today-sunset').textContent =
+        `日の入 ${formatTime(d.sunset[0])}`;
+
+      block('today-card');
+
+      // Summary
+      document.getElementById('summary-text').innerHTML = buildSummary(loc.name, d);
+      block('summary-alert');
+
+      // Weekly
+      const cards = document.getElementById('weekly-cards');
+      cards.innerHTML = '';
+      for (let i = 0; i < 7; i++) {
+        const di = weatherInfo(d.weather_code[i]);
+        const card = document.createElement('div');
+        card.className = 'day-card';
+        const rain = d.precipitation_probability_max[i];
+        card.innerHTML = `
+          <div class="day-name">${dayLabel(d.time[i], i)}</div>
+          <div class="day-icon">${di.icon}</div>
+          <div class="day-max">${d.temperature_2m_max[i]}°</div>
+          <div class="day-min">${d.temperature_2m_min[i]}°</div>
+          <div class="day-rain">&#128167; ${rain}%</div>
+        `;
+        cards.appendChild(card);
+      }
+      block('weekly');
+    }
+
+    // Allow Enter key to search
+    document.getElementById('city-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') searchCity();
+    });
+
+    // Auto-load Tokyo on start
+    document.getElementById('city-input').value = 'Tokyo';
+    searchCity();
+  </script>
+</body>
+</html>
